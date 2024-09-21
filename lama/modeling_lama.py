@@ -1168,3 +1168,42 @@ class LamaModel(LamaPretrainedModel):
         )
 
         return batch
+
+
+def convert_from_big_lama_zip(
+    repo_id: str = "smartywu/big-lama",
+    zip_filename: str = "big-lama.zip",
+    checkpoint_path: str = "big-lama/models/best.ckpt",
+):
+    from zipfile import ZipFile
+
+    from huggingface_hub import hf_hub_download
+
+    config = LamaConfig()
+    model = LamaPretrainedModel(config)
+
+    zip_path = hf_hub_download(repo_id=repo_id, filename=zip_filename)
+
+    def load_checkpoint(zip_file, checkpoint_path: str):
+        with zip_file.open(checkpoint_path) as rf:
+            state_dict = torch.load(rf, map_location="cpu")
+        return state_dict
+
+    def load_training_state_dict(zip_path: str, checkpoint_path: str):
+        with ZipFile(zip_path, "r") as zip_file:
+            state_dict = load_checkpoint(zip_file, checkpoint_path)
+        return state_dict
+
+    training_state_dict = load_training_state_dict(zip_path, checkpoint_path)
+    model_state_dict = training_state_dict["state_dict"]
+
+    model.load_state_dict(
+        model_state_dict,
+        # en: The original state_dict contains parameters
+        # other than the generator (e.g., val_evaluator, test_evaluator),
+        # so set strict=False
+        strict=False,
+    )
+    model.eval()
+
+    return model
